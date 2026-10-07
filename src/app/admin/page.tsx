@@ -69,9 +69,32 @@ export default function AdminDashboard() {
     fetch(`/api/notes?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
-        setNotes(data.notes || []);
+        const customNotes = JSON.parse(localStorage.getItem("docsearch_custom_notes") || "[]");
+        
+        // Filter custom notes by search query and subject if needed
+        let filteredCustom = customNotes;
+        if (query) {
+          const q = query.toLowerCase();
+          filteredCustom = filteredCustom.filter((n: any) => 
+            n.title.toLowerCase().includes(q) || n.courseCode.toLowerCase().includes(q) || n.subject.toLowerCase().includes(q)
+          );
+        }
+        if (subj && subj !== "ALL") {
+          filteredCustom = filteredCustom.filter((n: any) => n.subject === subj);
+        }
+
+        const combinedNotes = [...filteredCustom, ...(data.notes || [])];
+        
+        // Deduplicate in case the backend also returns them during active memory
+        const uniqueNotes = Array.from(new Map(combinedNotes.map(item => [item.id, item])).values());
+        
+        setNotes(uniqueNotes);
+        
         if (data.subjects && Array.isArray(data.subjects)) {
-          setDynamicSubjects(data.subjects);
+          // Add subjects from custom notes
+          const customSubjects = customNotes.map((n: any) => n.subject);
+          const allSubjects = Array.from(new Set([...data.subjects, ...customSubjects]));
+          setDynamicSubjects(allSubjects);
         }
         setLoading(false);
       })
@@ -141,6 +164,12 @@ export default function AdminDashboard() {
       }
 
       setFormSuccess(`Successfully ingested "${title}" with Course Code ${courseCode}!`);
+      
+      // Save locally to bypass Vercel stateless memory
+      const customNotes = JSON.parse(localStorage.getItem("docsearch_custom_notes") || "[]");
+      customNotes.unshift(data.note);
+      localStorage.setItem("docsearch_custom_notes", JSON.stringify(customNotes));
+
       fetchNotes();
 
       setTimeout(() => {
@@ -216,10 +245,10 @@ export default function AdminDashboard() {
               </p>
             </div>
 
-            <div className="flex items-center space-x-3 shrink-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto mt-4 md:mt-0">
               <button
                 onClick={() => setShowAnalytics(!showAnalytics)}
-                className="px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-bold flex items-center space-x-2 transition-colors"
+                className="w-full sm:w-auto justify-center px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-bold flex items-center space-x-2 transition-colors"
               >
                 <BarChart3 className="w-4 h-4 text-indigo-400" />
                 <span>{showAnalytics ? "Hide Analytics" : "Show Analytics"}</span>
@@ -229,7 +258,7 @@ export default function AdminDashboard() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsIngestModalOpen(true)}
-                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 border border-indigo-400/40 flex items-center space-x-2 transition-transform"
+                className="w-full sm:w-auto justify-center px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 border border-indigo-400/40 flex items-center space-x-2 transition-transform"
               >
                 <PlusCircle className="w-5 h-5" />
                 <span>Ingest Material</span>
